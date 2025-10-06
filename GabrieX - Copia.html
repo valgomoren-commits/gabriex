@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GabrieX - Pool Game</title>
+    
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* Deixando a altura mínima para o jogo aparecer centralizado na tela */
+            min-height: 100vh; 
+            margin: 0;
+            background-color: #2c3e50; /* Fundo escuro */
+            font-family: Arial, sans-serif;
+        }
+
+        #game-container {
+            position: relative;
+            /* O container agora tem 1200x500 */
+            border: 5px solid #32CD32; /* Borda verde limão */
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+
+        #game {
+            display: block;
+            background-color: #8B5A2B; /* Cor de fundo do jogo */
+        }
+
+        /* Estilos para a Tela de Início */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        #start-screen h1 {
+            font-size: 60px;
+            color: #FFC300;
+        }
+
+        #start-screen p {
+            font-size: 18px;
+        }
+
+        #start-screen button {
+            padding: 15px 30px;
+            font-size: 24px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+
+        #start-screen button:hover {
+            background-color: #45a049;
+        }
+
+        /* Estilos para o Pop-up de Tutorial */
+        .popup {
+            display: none; /* Escondido por padrão */
+            position: fixed;
+            z-index: 20;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .popup-content {
+            background-color: #333;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            text-align: left;
+        }
+
+        .popup-content h2 {
+            text-align: center;
+            color: #00BFFF;
+        }
+
+        .popup-content p {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .popup-content strong {
+            color: #FFC300;
+        }
+
+        #close-popup {
+            background-color: #FF5733;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            float: right;
+            margin-top: 15px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="game" width="1200" height="500"></canvas>
+        
+        <div id="start-screen">
+            <h1>GabrieX</h1>
+            <p>Jogadoras, Jogadores, Jogadoris, jogar bolinhas de gude do TRIÂNGULO é muito tradicional e agora se chama GabrieX, clique abaixo e divirtam-se!</p>
+            <button id="start-button">INICIAR JOGO</button>
+        </div>
+
+        <div id="tutorial-popup" class="popup">
+            <div class="popup-content">
+                <h2>Como Jogar GabrieX</h2>
+                <p>1. **Mira e Força:** Clique na bolinha preta e arraste o mouse na direção OPOSTA que você quer lançar (como em um estilingue).</p>
+                <p>2. **Objetivo:** Acertar as bolinhas coloridas para tirá-las do triângulo. Cada bolinha que sai do triângulo vale 1 ponto.</p>
+                <p>3. **Fim da Jogada:** Sua jogada termina quando todas as bolinhas (incluindo a preta) param de se mover.</p>
+                <p>4. **Regra de Ouro:** Se a bolinha preta parar dentro do triângulo, você perde os pontos do nível atual e as bolinhas capturadas voltam.</p>
+                <p>5. **Obstáculos:** Bolinhas roxas são fixas. Os diabinhos (😈) caçam você e, se tocarem na bolinha preta, você perde o progresso do nível.</p>
+                <p>6. **Vitória:** Limpe o triângulo para avançar para o próximo nível!</p>
+                <p>7. **Modo Multiplayer:** No modo de 2 a 5 jogadores, a vez só é passada para o próximo jogador após o jogador atual completar o nível (limpar o triângulo).</p>
+                <button id="close-popup">ENTENDI</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+        const tutorialPopup = document.getElementById("tutorial-popup");
+        const closePopupBtn = document.getElementById("close-popup");
+
+        // --- Função segura para tentar tocar o áudio e ignorar erros ---
+        const safePlay = (audio) => {
+            if (audio && audio.play) {
+                audio.play().catch(e => {
+                    // console.log("Erro ao tocar áudio:", e.message); 
+                });
+            }
+        };
+
+        const gameSounds = {
+            tiroDaBolinha: new Audio('audio/tiro-da-bolinha.mp3'),
+            colisaoBolaColorida: new Audio('audio/colisao-bola-colorida.mpes'),
+            colisaoLateral: new Audio('audio/colisao-lateral.mp3'),
+            colisaoObstaculoFixo: new Audio('audio/colisao-obstaculo-fixo.mp3'),
+            colisaoDiabinho: new Audio('audio/colisao-diabinho.mp3'),
+            musicaDeFundo: new Audio('audio/musica-de-fundo.mp3'),
+            mudancaDeNivel: new Audio('audio/mudanca-de-nivel.mp3'),
+            voltaAoPontoInicial: new Audio('audio/volta-ao-ponto-inicial.mp3'),
+            recordeBatido: new Audio('audio/record.mp3'),
+            playSafe: safePlay 
+        };
+
+
+        // --- Variáveis de Jogo ---
+        const GAME_WIDTH = canvas.width; // 1200
+        const GAME_HEIGHT = canvas.height; // 500
+        const PANEL_WIDTH = 150;
+        const GAME_AREA_WIDTH = GAME_WIDTH - PANEL_WIDTH; // 1050
+        const radius = 7;
+
+        // Triângulo de bolinhas
+        const L = 180;
+        const H = Math.sqrt(3)/2*L;
+        const marginRight = 50;
+        const centerY = GAME_HEIGHT/2;
+        const tip = {x: GAME_AREA_WIDTH-marginRight, y: centerY}; 
+        const topRight = {x: tip.x-L, y: centerY-H/2};
+        const bottomRight = {x: tip.x-L, y: centerY+H/2};
+
+        let balls=[], capturedBalls=[];
+        let dragStart={x:0,y:0}, dragCurrent={x:0,y:0}, mouse={x:0,y:0};
+        let startTime=0;
+        let pausedTime = 0; 
+        let accumulatedPauseTime = 0; 
+        let gameStarted=false;
+        let gameLoopRunning=false;
+        let hitColoredBallThisTurn = false;
+        let levelChanging = false;
+        let showHighScores = false;
+        let isMuted = false;
+        let isPaused = false; 
+
+        const ballColors=["#FFFF00","#ADD8E6","#FF6347","#00FF7F","#8A2BE2","#FFD700","#DC149C","#00BFFF","#7FFF00","#FF1493","#BA55D3","#4682B4","#D2691E","#FF4500"];
+        
+        // --- Variáveis Multiplayer/Turno e a Bola Única ---
+        let players = [];
+        let currentPlayerIndex = 0;
+        let numPlayers = 1; // 1 (Solo) a 5 (Max)
+        const MAX_PLAYERS = 5;
+
+        // NOVO: Definição da ÚNICA bola do jogador (taco)
+        let playerBall = {
+            x: 10 * radius,
+            y: GAME_HEIGHT / 2,
+            vx: 0,
+            vy: 0,
+            radius: radius,
+            color: "black",
+            dragging: false,
+            isPlayer: true,
+            mass: 1.0,
+        };
+
+        // --- Efeito de poeira (mantido) ---
+        let dustParticles = [];
+
+        function createDustParticle(x, y, vx, vy) {
+            const speed = Math.hypot(vx, vy);
+            if (speed > 1) {
+                const angle = Math.atan2(-vy, -vx);
+                const randAngle = angle + (Math.random() - 0.5) * Math.PI / 4;
+                const randSpeed = Math.random() * 0.5 + 0.1;
+                
+                dustParticles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(randAngle) * randSpeed,
+                    vy: Math.sin(randAngle) * randSpeed,
+                    radius: Math.random() * 2 + 1,
+                    life: 60,
+                    maxLife: 60
+                });
+            }
+        }
+
+        function updateDustParticles() {
+            for (let i = dustParticles.length - 1; i >= 0; i--) {
+                const p = dustParticles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+                
+                if (p.life <= 0) {
+                    dustParticles.splice(i, 1);
+                }
+            }
+        }
+
+        function drawDustParticles() {
+            for (const p of dustParticles) {
+                ctx.beginPath();
+                const opacity = p.life / p.maxLife;
+                ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`; 
+                ctx.arc(p.x, p.y, p.radius * (p.life / p.maxLife), 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        // --- Fim do efeito de poeira ---
+
+        function saveScore(score) {
+            const highScores = JSON.parse(localStorage.getItem('gabdex_high_scores') || '[]');
+            const highestScore = highScores.length > 0 ? highScores[0].score : 0;
+            
+            if (score > highestScore) {
+                gameSounds.playSafe(gameSounds.recordeBatido);
+            }
+            
+            const now = new Date();
+            const timestamp = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+            highScores.push({ score: score, timestamp: timestamp });
+            highScores.sort((a, b) => b.score - a.score);
+            const topScores = highScores.slice(0, 10);
+            localStorage.setItem('gabdex_high_scores', JSON.stringify(topScores));
+        }
+
+        // Função drawScores modificada para aceitar yOffset
+        function drawScores(yOffset) {
+            if (!showHighScores) return;
+
+            const highScores = JSON.parse(localStorage.getItem('gabdex_high_scores') || '[]');
+            const startY = yOffset || 400; // Usa yOffset ou 400 como fallback
+            const panelCenterX = GAME_AREA_WIDTH + PANEL_WIDTH / 2;
+
+            ctx.fillStyle = "white";
+            ctx.font = "bold 16px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("Recordes:", panelCenterX, startY);
+            
+            highScores.forEach((s, i) => {
+                ctx.font = "12px Arial";
+                ctx.fillText(`${i + 1}. ${s.score} pts`, panelCenterX, startY + 20 + i * 15);
+            });
+        }
+
+        function randomPointInTriangle(A,B,C){
+            let u=Math.random(), v=Math.random();
+            if(u+v>1){u=1-u;v=1-v;}
+            return {x: A.x + u*(B.x-A.x) + v*(C.x-A.x), y: A.y + u*(B.y-A.y) + v*(C.y-A.y)};
+        }
+
+        function pointInTriangle(p, A, B, C) {
+            function sign(p1, p2, p3) {
+                return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+            }
+
+            const b1 = sign(p, A, B) < 0;
+            const b2 = sign(p, B, C) < 0;
+            const b3 = sign(p, C, A) < 0;
+
+            return ((b1 == b2) && (b2 == b3));
+        }
+
+        function generateObstaclesForLevel(level) {
+            const obstacles = [];
+            const numFixedObstacles = Math.max(0, level - 1); 
+            const numDiabinhos = Math.max(0, level - 3);
+            
+            // Gera obstáculos fixos (bolinhas roxas)
+            for (let i = 0; i < numFixedObstacles; i++) {
+                let placed = false;
+                let attempts = 0;
+                while (!placed && attempts < 500) {
+                    const x = 100 + Math.random() * (GAME_AREA_WIDTH - 200);
+                    const y = 100 + Math.random() * (GAME_HEIGHT - 200);
+                    const newObstacle = {
+                        type: 'circle',
+                        x: x,
+                        y: y,
+                        radius: 20 + Math.random() * 10,
+                        color: '#8A2BE2',
+                        mass: 100,
+                        pointsPenalty: 1 
+                    };
+                    
+                    const isOverlapping = obstacles.some(obst => Math.hypot(obst.x - x, obst.y - y) < obst.radius + newObstacle.radius + 10) ||
+                                         Math.hypot(playerBall.x - x, playerBall.y - y) < playerBall.radius + newObstacle.radius + 10;
+                    
+                    const isInTriangle = pointInTriangle(newObstacle, tip, topRight, bottomRight);
+
+                    if (!isOverlapping && !isInTriangle) {
+                        obstacles.push(newObstacle);
+                        placed = true;
+                    }
+                    attempts++;
+                }
+            }
+
+            // Gera diabinhos
+            for (let i = 0; i < numDiabinhos; i++) {
+                let placed = false;
+                let attempts = 0;
+                while (!placed && attempts < 500) {
+                    const x = 100 + Math.random() * (GAME_AREA_WIDTH - 200);
+                    const y = 100 + Math.random() * (GAME_HEIGHT - 200);
+                    const diabinho = {
+                        type: 'diabinho',
+                        name: 'VarTex',
+                        emoji: '😈',
+                        x: x,
+                        y: y,
+                        radius: 10,
+                        vx: 0,
+                        vy: 0,
+                        speed: 0.05 + (level - 4) * 0.01,
+                        mass: 1.0 
+                    };
+                    
+                    const isOverlapping = obstacles.some(obst => Math.hypot(obst.x - x, obst.y - y) < obst.radius + diabinho.radius + 10) ||
+                                         Math.hypot(playerBall.x - x, playerBall.y - y) < playerBall.radius + diabinho.radius + 10;
+                    
+                    const isInTriangle = pointInTriangle(diabinho, tip, topRight, bottomRight);
+
+                    if (!isOverlapping && !isInTriangle) {
+                        obstacles.push(diabinho);
+                        placed = true;
+                    }
+                    attempts++;
+                }
+            }
+
+            return obstacles;
+        }
+
+        function getClosestPointOnTriangle(p) {
+          const points = [tip, topRight, bottomRight];
+          const segments = [
+            [tip, topRight],
+            [topRight, bottomRight],
+            [bottomRight, tip]
+          ];
+          let minDistanceSq = Infinity;
+          let closestPoint = null;
+
+          for (const seg of segments) {
+            const a = seg[0];
+            const b = seg[1];
+            const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+            const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2));
+            const projectionX = a.x + t * (b.x - a.x);
+            const projectionY = a.y + t * (b.y - a.y);
+            const distSq = (p.x - projectionX) ** 2 + (p.y - projectionY) ** 2;
+
+            if (distSq < minDistanceSq) {
+              minDistanceSq = distSq;
+              closestPoint = { x: projectionX, y: projectionY };
+            }
+          }
+          return closestPoint;
+        }
+
+        // Colisão entre duas bolas (playerBall e/ou bolas coloridas)
+        function resolveCollision(b1,b2){
+            if((b1.isPlayer && !b2.isPlayer) || (!b1.isPlayer && b2.isPlayer)) { hitColoredBallThisTurn = true; }
+            
+            const dx=b2.x-b1.x, dy=b2.y-b1.y, dist=Math.hypot(dx,dy);
+            if(dist<radius*2){
+                const overlap = radius * 2 - dist;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                
+                const totalMass = b1.mass + b2.mass;
+                const separation1 = overlap * (b2.mass / totalMass);
+                const separation2 = overlap * (b1.mass / totalMass);
+
+                b1.x -= nx * separation1;
+                b1.y -= ny * separation1; 
+                b2.x += nx * separation2;
+                b2.y += ny * separation2;
+
+                const p=2*(b1.vx*nx+b1.vy*ny-b2.vx*nx-b2.vy*ny)/(b1.mass+b2.mass);
+                b1.vx-=p*b2.mass*nx; b1.vy-=p*b2.mass*ny; 
+                b2.vx+=p*b1.mass*nx; b2.vy+=p*b1.mass*ny;
+                
+                if (b1.isPlayer || b2.isPlayer) {
+                    gameSounds.playSafe(gameSounds.colisaoBolaColorida);
+                }
+            }
+        }
+
+        // Posição de início da bola preta.
+        const initialPlayerPositions=[
+            { x: 10*radius, y: GAME_HEIGHT / 2 },
+        ];
+
+        let natureElements = [];
+        const NUM_NATURE_ELEMENTS = 30;
+        let groundTexture = []; 
+        let currentObstacles = [];
+
+        function generateNatureElements() {
+            const emojis = ["🌿", "🌸", "🐜", "🐛", "🌱", "🍂", "🍁"]; 
+            natureElements = [];
+            for (let i = 0; i < NUM_NATURE_ELEMENTS; i++) {
+                const x = Math.random() * GAME_AREA_WIDTH;
+                const y = Math.random() * GAME_HEIGHT;
+                const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                natureElements.push({ x, y, emoji });
+            }
+        }
+
+        function generateGroundTexture() {
+            groundTexture = [];
+            const baseColor = { r: 139, g: 90, b: 43 }; 
+
+            for (let i = 0; i < 50; i++) {
+                const x = Math.random() * GAME_AREA_WIDTH;
+                const y = Math.random() * GAME_HEIGHT;
+                const size = 100 + Math.random() * 200;
+                const opacity = 0.05 + Math.random() * 0.1;
+                const shade = Math.floor(Math.random() * 50) - 25; 
+                groundTexture.push({
+                    type: 'circle', x, y, radius: size,
+                    color: `rgba(${baseColor.r + shade}, ${baseColor.g + shade}, ${baseColor.b + shade}, ${opacity})`
+                });
+            }
+
+            for (let i = 0; i < 500; i++) {
+                const x = Math.random() * GAME_AREA_WIDTH;
+                const y = Math.random() * GAME_HEIGHT;
+                const size = 1 + Math.random() * 4;
+                const opacity = 0.1 + Math.random() * 0.3;
+                const shade = Math.floor(Math.random() * 30) - 15;
+                groundTexture.push({
+                    type: 'rect', x, y, width: size, height: size,
+                    color: `rgba(${baseColor.r + shade}, ${baseColor.g + shade}, ${baseColor.b + shade}, ${opacity})`
+                });
+            }
+        }
+
+        // Função crucial para resetar o progresso do jogador em caso de penalidade
+        function resetLevelProgress() {
+            const p = players[currentPlayerIndex];
+            if (p) {
+                // Remove pontos ganhos neste nível
+                p.score = p.scoreAtLevelStart; 
+
+                // Devolve as bolinhas capturadas para o triângulo
+                while (p.capturedBalls.length > 0) {
+                    const b = p.capturedBalls.pop();
+                    let placed = false;
+                    let attempts = 0;
+                    while (!placed && attempts < 1000) {
+                        const pos = randomPointInTriangle(tip, topRight, bottomRight);
+                        // Checa colisão apenas com as bolas coloridas e obstáculos
+                        const canPlace = [...balls, ...currentObstacles].every(item => Math.hypot(item.x - pos.x, item.y - pos.y) >= radius * 2);
+
+                        if (canPlace) {
+                            balls.push({x: pos.x, y: pos.y, color: b.color, vx: 0, vy: 0, mass: 1.0, isPlayer: false});
+                            placed = true;
+                        }
+                        attempts++;
+                    }
+                }
+                
+                // Volta a playerBall para a posição inicial
+                playerBall.x = initialPlayerPositions[0].x;
+                playerBall.y = initialPlayerPositions[0].y;
+                playerBall.vx = 0;
+                playerBall.vy = 0;
+            }
+        }
+
+        // Função para passar o turno para o próximo jogador E iniciar o nível dele
+        function passTurn() {
+             // Apenas passa o turno se houver mais de 1 jogador
+            if (numPlayers > 1) {
+                currentPlayerIndex = (currentPlayerIndex + 1) % numPlayers;
+            }
+             
+            // NOVO: Inicia o nível do NOVO jogador.
+            const nextPlayer = players[currentPlayerIndex];
+            if (nextPlayer) {
+                startLevel(nextPlayer.level);
+            }
+        }
+        
+        // Função para avançar o nível do jogador (e potencialmente o nível do jogo)
+        function advancePlayerLevel() {
+            const p = players[currentPlayerIndex];
+            if (p) {
+                // NOVO: Calcula o tempo total de jogo (em segundos)
+                let elapsed;
+                if (isPaused && pausedTime > 0) {
+                    elapsed = Math.floor((pausedTime - startTime - accumulatedPauseTime) / 1000);
+                } else {
+                    elapsed = Math.floor((Date.now() - startTime - accumulatedPauseTime) / 1000);
+                }
+                
+                // Atribui o tempo decorrido ao jogador atual (isso se acumula)
+                p.totalTimePlayed = elapsed; 
+
+                p.level++;
+                p.scoreAtLevelStart = p.score; // Salva o novo placar inicial do nível
+                
+                // 1. Passa o turno. O passTurn agora chama startLevel para o novo jogador.
+                passTurn();
+            }
+        }
+
+
+        // Corrigido para carregar o nível do jogador atual
+        function startLevel(level) {
+            
+            balls = [];
+            
+            // Obstáculos são gerados com base no nível ATUAL do JOGADOR
+            currentObstacles = generateObstaclesForLevel(level);
+
+            // Reseta as bolinhas capturadas para o próximo nível (jogador ATUAL)
+            players[currentPlayerIndex].capturedBalls = [];
+
+            let attempts=0;
+            while(balls.length<14 && attempts<1000){
+                const pos=randomPointInTriangle(tip,topRight,bottomRight);
+                
+                // Verifica colisão com todas as entidades (bolas coloridas e a playerBall)
+                const canPlace = [...balls, playerBall, ...currentObstacles].every(item => Math.hypot(item.x - pos.x, item.y - pos.y) >= radius * 2);
+
+                if(canPlace){
+                    balls.push({x:pos.x,y:pos.y,color:ballColors[balls.length%ballColors.length],vx:0,vy:0,mass: 1.0, isPlayer: false});
+                }
+                attempts++;
+            }
+
+            // A playerBall volta para a posição inicial 
+            playerBall.x = initialPlayerPositions[0].x;
+            playerBall.y = initialPlayerPositions[0].y;
+            playerBall.vx = 0;
+            playerBall.vy = 0;
+            
+            // Se for o primeiro nível do J1, reseta o timer
+            if (level === 1 && currentPlayerIndex === 0) { 
+                startTime = Date.now();
+                accumulatedPauseTime = 0; 
+            }
+        }
+
+        // --- Inicialização do Jogo e dos Jogadores ---
+        function initializePlayers() {
+            players = [];
+            for (let i = 0; i < numPlayers; i++) {
+                players.push({
+                    id: i + 1,
+                    score: 0,
+                    level: 1, 
+                    playerNumber: i + 1,
+                    scoreAtLevelStart: 0,
+                    capturedBalls: [],
+                    // NOVO: Tempo total de jogo (em segundos)
+                    totalTimePlayed: 0 
+                });
+            }
+            currentPlayerIndex = 0;
+        }
+
+        function initGame(){
+            // Se o jogo não está iniciado, prepara o ambiente
+            if(!gameStarted){
+                generateGroundTexture();
+                generateNatureElements();
+                gameSounds.musicaDeFundo.loop = true;
+                gameSounds.musicaDeFundo.volume = 0.3;
+                gameSounds.playSafe(gameSounds.musicaDeFundo);
+                if(!gameLoopRunning){
+                    requestAnimationFrame(update);
+                    gameLoopRunning=true;
+                }
+            }
+            
+            // Inicializa ou re-inicializa APENAS os dados dos jogadores, mantendo a tela
+            initializePlayers();
+            gameStarted=true;
+
+            // Começa o nível do PRIMEIRO jogador
+            startLevel(players[0].level);
+        }
+
+        // NOVO: Função para encontrar o melhor jogador (Nível > Tempo Médio > Pontuação)
+        function findBestPlayer() {
+            if (players.length === 0) return null;
+
+            let bestPlayer = players[0];
+            
+            // Função auxiliar para calcular o tempo médio por nível
+            const calculateAvgTime = (player) => {
+                // Se o jogador não completou o Nível 1, considera o tempo infinito (pior)
+                return player.level > 1 ? player.totalTimePlayed / (player.level - 1) : Infinity; 
+            };
+
+            let bestAvgTime = calculateAvgTime(bestPlayer);
+            let bestScore = bestPlayer.score;
+
+            for (let i = 1; i < players.length; i++) {
+                const p = players[i];
+                const pAvgTime = calculateAvgTime(p);
+
+                // 1. Checa o Nível (o critério primário)
+                if (p.level > bestPlayer.level) {
+                    bestPlayer = p;
+                    bestAvgTime = pAvgTime;
+                    bestScore = p.score;
+                } 
+                // 2. Se o nível for igual, checa o Tempo Médio (o critério de desempate de eficiência)
+                else if (p.level === bestPlayer.level) {
+                    
+                    if (pAvgTime < bestAvgTime) { // Tempo MENOR é melhor!
+                        bestPlayer = p;
+                        bestAvgTime = pAvgTime;
+                        bestScore = p.score;
+                    } 
+                    // 3. Se o Nível e o Tempo Médio forem iguais, checa a Pontuação (último desempate)
+                    else if (pAvgTime === bestAvgTime && p.score > bestScore) {
+                        bestPlayer = p;
+                        bestScore = p.score;
+                    }
+                }
+            }
+            return bestPlayer;
+        }
+
+
+        // --- Funções de botão ---
+        const panelButton = (text, y, width, height, color, onClick) => ({
+            text, y, width, height, color, onClick
+        });
+        
+        function cycleNumPlayers() {
+            numPlayers = (numPlayers % MAX_PLAYERS) + 1;
+            // Se o jogo já tiver começado, reinicia APENAS os dados do jogador
+            if (gameStarted) {
+                initGame(); 
+            }
+        }
+
+        const buttons = {
+            players: panelButton("", 260, 110, 30, "#AAAAAA", cycleNumPlayers), 
+            tutorial: panelButton("Tutorial", 300, 110, 30, "#4CAF50", () => {
+                tutorialPopup.style.display = "flex"; 
+            }),
+            highScores: panelButton("Recordes", 340, 110, 30, "#008CBA", () => {
+                showHighScores = !showHighScores;
+            }),
+            pause: panelButton("", 380, 110, 30, "#FF8C33", () => {
+                isPaused = !isPaused;
+                if (isPaused) {
+                    gameSounds.musicaDeFundo.pause();
+                    pausedTime = Date.now(); 
+                } else {
+                    accumulatedPauseTime += Date.now() - pausedTime;
+                    pausedTime = 0;
+                    if (!isMuted) {
+                        gameSounds.playSafe(gameSounds.musicaDeFundo);
+                    }
+                }
+            }),
+            volume: panelButton("", 420, 110, 30, "#FF5733", () => { 
+                isMuted = !isMuted;
+                for (const key in gameSounds) {
+                    gameSounds[key].muted = isMuted;
+                }
+                if (!isMuted && !isPaused) { 
+                    gameSounds.playSafe(gameSounds.musicaDeFundo);
+                } else if (isMuted) {
+                    gameSounds.musicaDeFundo.pause();
+                }
+            })
+        };
+
+        function checkButtonClick(mouseX, mouseY) {
+            const panelCenterX = GAME_AREA_WIDTH + PANEL_WIDTH / 2;
+            for (const key in buttons) {
+                const btn = buttons[key];
+                const btnX = panelCenterX - btn.width / 2;
+                if (mouseX > btnX && mouseX < btnX + btn.width && mouseY > btn.y && mouseY < btn.y + btn.height) {
+                    btn.onClick();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // --- Mouse events ---
+        window.addEventListener("mousemove", e=>{
+            if(!gameStarted) return; 
+            
+            const rect=canvas.getBoundingClientRect();
+            const mouseX_scaled = (e.clientX-rect.left)*(canvas.width/rect.width);
+            const mouseY_scaled = (e.clientY-rect.top)*(canvas.height/rect.height);
+
+            mouse.x = mouseX_scaled;
+            mouse.y = mouseY_scaled;
+
+            const p=playerBall; // Usa playerBall
+            
+            // Só pode arrastar se a bola estiver parada
+            if (p && !isPaused && Math.hypot(p.vx, p.vy) < 0.05 && Math.hypot(mouse.x - p.x, mouse.y - p.y) < radius * 2) {
+                canvas.style.cursor = 'grab'; 
+            } else {
+                canvas.style.cursor = 'default';
+            }
+
+            if(p && p.dragging) dragCurrent={x:mouse.x, y:mouse.y};
+        });
+
+        closePopupBtn.addEventListener("click", () => {
+            tutorialPopup.style.display = "none";
+        });
+
+        window.addEventListener("mousedown", e=>{
+            const rect=canvas.getBoundingClientRect();
+            const mouseX=(e.clientX-rect.left)*(canvas.width/rect.width);
+            const mouseY=(e.clientY-rect.top)*(canvas.height/rect.height);
+            
+            if (checkButtonClick(mouseX, mouseY)) return;
+
+            if(!gameStarted || isPaused) return; 
+
+            const p=playerBall; // Usa playerBall
+            // Apenas pode arrastar se a bola estiver parada
+            if(Math.hypot(p.vx, p.vy) < 0.05 && Math.hypot(mouseX-p.x, mouseY-p.y)<radius){ 
+                p.dragging=true; 
+                dragStart={x:mouseX,y:mouseY}; 
+                dragCurrent={x:mouseX,y:mouseY}; 
+                hitColoredBallThisTurn = false;
+                canvas.style.cursor = 'grabbing';
+            }
+        });
+
+        window.addEventListener("mouseup", e=>{
+            if(!gameStarted || isPaused) return; 
+            const p=playerBall; // Usa playerBall
+            if(p && p.dragging){ 
+                p.vx=(dragStart.x-mouse.x)*0.2; 
+                p.vy=(dragStart.y-mouse.y)*0.2; 
+                p.dragging=false; 
+                canvas.style.cursor = 'default';
+                if (!isMuted) {
+                    gameSounds.tiroDaBolinha.currentTime = 0; 
+                    gameSounds.playSafe(gameSounds.tiroDaBolinha); 
+                }
+            }
+        });
+
+        function drawGround() {
+            ctx.fillStyle = "#8B5A2B"; 
+            ctx.fillRect(0, 0, GAME_AREA_WIDTH, GAME_HEIGHT);
+
+            groundTexture.forEach(item => {
+                ctx.fillStyle = item.color;
+                if (item.type === 'circle') {
+                    ctx.beginPath();
+                    ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (item.type === 'rect') {
+                    ctx.fillRect(item.x, item.y, item.width, item.height);
+                }
+            });
+        }
+
+        function drawNatureElements() {
+            ctx.font = "24px 'Segoe UI Emoji', 'Apple Color Emoji', 'Twemoji Mozilla', 'Noto Color Emoji', 'Segoe UI Symbol', sans-serif";
+            natureElements.forEach(element => {
+                ctx.fillText(element.emoji, element.x, element.y);
+            });
+        }
+
+        // NOVO: Função para desenhar o placar de tempo (Eficiência)
+function drawTimeLeaderboard(panelCenterX, startY) {
+    
+    // 1. Filtra e Calcula o Tempo (apenas jogadores que passaram do Nível 1)
+    let timedPlayers = players
+        .filter(p => p.level > 1) 
+        .map(p => {
+            // Mantemos o avgTime para a ordenação, mas não vamos mais exibi-lo
+            const avgTime = p.totalTimePlayed / (p.level - 1); 
+            return {
+                playerNumber: p.playerNumber,
+                avgTime: avgTime, 
+                totalTimePlayed: p.totalTimePlayed,
+                level: p.level
+            };
+        });
+
+    // 2. Classifica: Menor Tempo Médio primeiro (o ranking é por eficiência)
+    timedPlayers.sort((a, b) => a.avgTime - b.avgTime);
+
+    ctx.fillStyle = "#FFC300";
+    // Título menor (14px) e texto ajustado
+    ctx.font = "bold 14px Arial"; 
+    ctx.fillText("📊 TEMPO TOTAL JOGADO", panelCenterX, startY);
+    
+    if (timedPlayers.length === 0) {
+        ctx.font = "14px Arial";
+        ctx.fillStyle = "white";
+        ctx.fillText("Ninguém completou o Nível 1.", panelCenterX, startY + 20);
+        return startY + 30;
+    }
+
+    let currentY = startY + 20;
+
+    timedPlayers.forEach((p, i) => {
+        // Converte segundos totais para Minutos:Segundos
+        const totalMinutes = Math.floor(p.totalTimePlayed / 60);
+        const totalSeconds = Math.floor(p.totalTimePlayed % 60).toString().padStart(2, '0');
+        
+        // Fonte diminuída para 12px
+        ctx.font = "12px Arial";
+        ctx.fillStyle = (p.playerNumber === players[currentPlayerIndex].playerNumber) ? "yellow" : "white";
+        
+        // Texto simplificado: Apenas a classificação, jogador e tempo total
+        const text = `${i + 1}. J${p.playerNumber}: ${totalMinutes}m${totalSeconds}s`;
+        
+        // Desenha o texto do placar um pouco à esquerda
+        ctx.fillText(text, panelCenterX - 65, currentY); 
+
+        currentY += 16; // Espaçamento ajustado para a fonte de 12px
+    });
+
+    return currentY + 5; // Retorna a próxima posição Y livre
+}
+
+        // --- Painel e Placar Multiplayer ---
+        function drawPanel(){
+            ctx.fillStyle="#333"; ctx.fillRect(GAME_AREA_WIDTH,0,PANEL_WIDTH,GAME_HEIGHT);
+
+            ctx.beginPath();
+            ctx.moveTo(GAME_AREA_WIDTH, 0);
+            ctx.lineTo(GAME_AREA_WIDTH, GAME_HEIGHT);
+            ctx.strokeStyle = "#32CD32"; 
+            ctx.lineWidth = 2; 
+            ctx.stroke();
+
+            const titlePanel="GabrieX", colors=["#FF5733","#33FF57","#3357FF","#F1C40F","#FF33A1","#33FFF6","#FF8C33"];
+            const startY=20, panelCenterX=GAME_AREA_WIDTH+PANEL_WIDTH/2;
+            ctx.font="italic bold 30px 'Comic Sans MS'"; ctx.textAlign="center";
+            let currentX=panelCenterX-ctx.measureText(titlePanel).width/2;
+            for(let i=0;i<titlePanel.length;i++){ 
+                const letter=titlePanel[i], color=colors[i%colors.length]; 
+                ctx.fillStyle=color; 
+                ctx.fillText(letter,currentX+ctx.measureText(letter).width/2,startY+Math.sin(Date.now()*0.003+i*0.3)*5); 
+                currentX+=ctx.measureText(letter).width; 
+            }
+
+            let mm="00", ss="00";
+            if (startTime > 0) {
+                let elapsed;
+                if (isPaused && pausedTime > 0) {
+                    elapsed = Math.floor((pausedTime - startTime - accumulatedPauseTime) / 1000);
+                } else {
+                    elapsed = Math.floor((Date.now() - startTime - accumulatedPauseTime) / 1000);
+                }
+
+                elapsed = Math.max(0, elapsed);
+                mm=String(Math.floor(elapsed/60)).padStart(2,'0'), ss=String(elapsed%60).padStart(2,'0');
+            }
+            
+            ctx.fillStyle="white"; ctx.font="24px Arial"; ctx.fillText(`${mm}:${ss}`, panelCenterX,80);
+            
+            // NOVO: Exibir o Líder
+            let scorePanelY = 130;
+            if (numPlayers > 1) {
+                const leader = findBestPlayer();
+                ctx.fillStyle = "#32CD32"; // Cor verde para o Líder
+                ctx.font = "bold 18px Arial";
+                ctx.fillText(`👑 LÍDER: J${leader.playerNumber}`, panelCenterX, 105); 
+            } else {
+                scorePanelY = 110;
+            }
+            
+            // --- PLACAR NORMAL ---
+            const currentPlayer = players[currentPlayerIndex];
+            ctx.fillStyle = "#FFC300";
+            ctx.font = "bold 20px Arial";
+            ctx.fillText(`Nível Atual: ${currentPlayer ? currentPlayer.level : 1}`, panelCenterX, scorePanelY); 
+            ctx.fillText("PONTUAÇÃO", panelCenterX, scorePanelY + 30); 
+
+            let scoreY = scorePanelY + 50;
+            players.forEach((p, i) => {
+                // SÓ DESTACA O JOGADOR ATUAL
+                ctx.fillStyle = (i === currentPlayerIndex) ? "yellow" : "white";
+                ctx.font = "16px Arial"; 
+                // Exibe Jogador e Pontos
+                ctx.fillText(`J${p.playerNumber}: ${p.score} (Nv ${p.level})`, panelCenterX, scoreY + i * 20);
+            });
+            // --- FIM PLACAR NORMAL ---
+            
+            // Botões: Posição Y inicial é 20px após o último placar
+            const buttonStartY = scoreY + (numPlayers * 20) + 20; 
+            
+            buttons.players.y = buttonStartY;
+            buttons.tutorial.y = buttonStartY + 40;
+            buttons.highScores.y = buttonStartY + 80;
+            buttons.pause.y = buttonStartY + 120;
+            buttons.volume.y = buttonStartY + 160;
+
+            for (const key in buttons) {
+                const btn = buttons[key];
+                const btnX = panelCenterX - btn.width / 2;
+                ctx.fillStyle = btn.color;
+                ctx.fillRect(btnX, btn.y, btn.width, btn.height);
+                ctx.fillStyle = "white";
+                ctx.font = "16px Arial";
+
+                if (key === 'volume') {
+                    btn.text = isMuted ? "Volume: OFF" : "Volume: ON";
+                } else if (key === 'pause') { 
+                    btn.text = isPaused ? "Continuar" : "Pausar";
+                } else if (key === 'players') { 
+                    btn.text = (numPlayers === 1) ? "Solo" : `${numPlayers} Jogadores`;
+                }
+                ctx.fillText(btn.text, panelCenterX, btn.y + btn.height/2 + 5);
+            }
+            
+            // NOVO PLACAR DE TEMPO: Abaixo do botão de Volume (420+30+15 = 465)
+            const timeLeaderboardY = buttons.volume.y + buttons.volume.height + 15; 
+            const finalYAfterTimeboard = drawTimeLeaderboard(panelCenterX, timeLeaderboardY);
+            
+            // Desenha os Recordes Abaixo do Placar de Tempo, se houver espaço (usando o finalYAfterTimeboard)
+            drawScores(finalYAfterTimeboard + 10); 
+        }
+
+        // --- Função para desenhar obstáculos (mantido) ---
+        function drawObstacles() {
+            currentObstacles.forEach(obst => {
+                if (obst.type === 'circle') {
+                    ctx.beginPath();
+                    ctx.arc(obst.x, obst.y, obst.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = obst.color;
+                    ctx.fill();
+                    ctx.strokeStyle = "white";
+                    ctx.stroke();
+                } else if (obst.type === 'diabinho') {
+                    ctx.font = "30px Arial";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(obst.emoji, obst.x, obst.y);
+                    
+                    const floatOffset = Math.sin(Date.now() * 0.005) * 5;
+                    ctx.font = "bold 14px Arial";
+                    ctx.fillStyle = "white";
+                    ctx.fillText(obst.name, obst.x, obst.y - 30 + floatOffset);
+                }
+            });
+        }
+
+        // --- Loop principal ---
+        function update(){
+            requestAnimationFrame(update);
+
+            ctx.clearRect(0,0,GAME_WIDTH,GAME_HEIGHT);
+
+            drawGround();
+            drawNatureElements();
+
+            updateDustParticles();
+            drawDustParticles();
+
+            drawPanel(); 
+
+            if (isPaused) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+                ctx.fillRect(0, 0, GAME_AREA_WIDTH, GAME_HEIGHT);
+                ctx.fillStyle = "white";
+                ctx.font = "bold 60px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("PAUSADO", GAME_AREA_WIDTH / 2, GAME_HEIGHT / 2);
+                
+                const p = playerBall;
+                 if (p) {
+                    ctx.beginPath(); 
+                    ctx.arc(p.x,p.y,radius,0,Math.PI*2); 
+                    ctx.fillStyle="black"; 
+                    ctx.fill(); 
+                    ctx.strokeStyle="white"; 
+                    ctx.stroke();
+                    ctx.fillStyle="white"; 
+                    ctx.font="9px Arial"; 
+                    ctx.textAlign="center"; 
+                    ctx.textBaseline="middle";
+                    // Desenha o número do jogador atual na bola
+                    ctx.fillText(players[currentPlayerIndex].playerNumber,p.x,p.y); 
+                 }
+                return;
+            }
+            
+            
+            ctx.beginPath(); ctx.moveTo(tip.x,tip.y); ctx.lineTo(topRight.x,topRight.y); ctx.lineTo(bottomRight.x,bottomRight.y); ctx.closePath();
+            ctx.strokeStyle="white"; ctx.lineWidth=2; ctx.stroke();
+            
+            drawObstacles();
+
+            let movingBallsCount=0;
+            // A lista de todas as bolas é: bolas coloridas + a playerBall
+            const allBalls=[...balls, playerBall];
+
+            allBalls.forEach(b=>{
+                if(b.isPlayer && b.dragging) return;
+                
+                const friction = b.isPlayer ? 0.98 : 0.99;
+                
+                b.x+=b.vx; b.y+=b.vy; b.vx*=friction; b.vy*=friction;
+
+                if(Math.hypot(b.vx,b.vy)>0.05) movingBallsCount++;
+                else {
+                    b.vx = 0;
+                    b.vy = 0;
+                }
+
+                // --- Efeito de poeira ---
+                if (b.isPlayer && Math.hypot(b.vx, b.vy) > 0.5) {
+                    createDustParticle(b.x, b.y, b.vx, b.vy);
+                }
+                // --- Fim do efeito de poeira ---
+
+                // Colisão com as bordas
+                if(b.x-radius<0){b.x=radius;b.vx*=-1; gameSounds.playSafe(gameSounds.colisaoLateral); } 
+                if(b.x+radius>GAME_AREA_WIDTH){b.x=GAME_AREA_WIDTH-radius;b.vx*=-1; gameSounds.playSafe(gameSounds.colisaoLateral); } 
+                if(b.y-radius<0){b.y=radius;b.vy*=-1; gameSounds.playSafe(gameSounds.colisaoLateral); } 
+                if(b.y+radius>GAME_HEIGHT){b.y=GAME_HEIGHT-radius;b.vy*=-1; gameSounds.playSafe(gameSounds.colisaoLateral); } 
+            });
+            
+            // Movimento do Diabinho (apenas persegue a playerBall)
+            currentObstacles.forEach(obst => {
+                if (obst.type === 'diabinho') {
+                    const player = playerBall;
+                    if (player) {
+                        const dx = player.x - obst.x;
+                        const dy = player.y - obst.y;
+                        const distance = Math.hypot(dx, dy);
+                        const repelDistance = 80;
+
+                        let repelX = 0;
+                        let repelY = 0;
+
+                        const closestPoint = getClosestPointOnTriangle(obst);
+                        const distFromTriangle = Math.hypot(obst.x - closestPoint.x, obst.y - closestPoint.y);
+
+                        if (distFromTriangle < repelDistance) {
+                            const angle = Math.atan2(obst.y - closestPoint.y, obst.x - closestPoint.x);
+                            const force = 1 - (distFromTriangle / repelDistance);
+                            repelX = Math.cos(angle) * force;
+                            repelY = Math.sin(angle) * force;
+                        }
+
+                        if (distance > 1) { 
+                            const angle = Math.atan2(dy, dx);
+                            obst.vx = (Math.cos(angle) * obst.speed) + repelX * obst.speed * 2;
+                            obst.vy = (Math.sin(angle) * obst.speed) + repelY * obst.speed * 2;
+                        }
+                    }
+                    
+                    obst.x += obst.vx;
+                    obst.y += obst.vy;
+
+                    // Colisão com as bordas da área de jogo 
+                    if(obst.x - obst.radius < 0){ obst.x = obst.radius; obst.vx *= -1; } 
+                    if(obst.x + obst.radius > GAME_AREA_WIDTH){ obst.x = GAME_AREA_WIDTH - obst.radius; obst.vx *= -1; }
+                    if(obst.y - obst.radius < 0){ obst.y = obst.radius; obst.vy *= -1; } 
+                    if(obst.y + obst.radius > GAME_HEIGHT){ obst.y = GAME_HEIGHT - obst.radius; obst.vy *= -1; }
+                }
+            });
+
+            // Colisão entre todas as bolas
+            for(let i=0;i<allBalls.length;i++){ 
+                for(let j=i+1;j<allBalls.length;j++){ 
+                    resolveCollision(allBalls[i],allBalls[j]); 
+                } 
+            }
+            
+            // Colisão de todas as bolas com os obstáculos fixos e diabinho
+            allBalls.forEach(ball => {
+                currentObstacles.forEach(obst => {
+                    if (obst.type === 'circle') {
+                        const dx = ball.x - obst.x;
+                        const dy = ball.y - obst.y;
+                        const distance = Math.hypot(dx, dy);
+                        const minDistance = ball.radius + obst.radius;
+
+                        if (distance < minDistance) {
+                            const normalX = dx / distance;
+                            const normalY = dy / distance;
+                            const dotProduct = ball.vx * normalX + ball.vy * normalY;
+                            ball.vx = ball.vx - 2 * dotProduct * normalX;
+                            ball.vy = ball.vy - 2 * dotProduct * normalY;
+                            const overlap = minDistance - distance;
+                            ball.x += normalX * overlap;
+                            ball.y += normalY * overlap;
+                            ball.vx *= 0.8;
+                            ball.vy *= 0.8;
+                            gameSounds.playSafe(gameSounds.colisaoObstaculoFixo); 
+                        }
+                    } else if (obst.type === 'diabinho' && ball.isPlayer) {
+                        const dx = ball.x - obst.x;
+                        const dy = ball.y - obst.y;
+                        const distance = Math.hypot(dx, dy);
+                        const minDistance = ball.radius + obst.radius;
+                        
+                        if (distance < minDistance) {
+                            resetLevelProgress();
+                            gameSounds.playSafe(gameSounds.colisaoDiabinho); 
+                        }
+                    }
+                });
+            });
+
+            // Desenha bolas coloridas
+            balls.forEach(b=>{ ctx.beginPath(); ctx.arc(b.x,b.y,radius,0,Math.PI*2); ctx.fillStyle=b.color; ctx.fill(); ctx.strokeStyle="black"; ctx.stroke(); });
+
+            const p = players[currentPlayerIndex];
+
+            // 1. Coleta de pontos (Aplica a pontuação apenas ao jogador atual)
+            for(let i=balls.length-1;i>=0;i--){
+                const ball=balls[i];
+                if(!pointInTriangle(ball, tip, topRight, bottomRight)){
+                    p.score+=1;
+                    p.capturedBalls.push(balls[i]);
+                    balls.splice(i,1);
+                }
+            }
+            
+            // 2. Fim do Turno
+            if (p && !playerBall.dragging && movingBallsCount === 0){
+                
+                // 2a. Checa Penalidade (Regra de Ouro)
+                if (pointInTriangle(playerBall, tip, topRight, bottomRight)) {
+                    resetLevelProgress();
+                    gameSounds.playSafe(gameSounds.voltaAoPontoInicial);
+                    // O turno NÃO PASSA. O jogador repete a jogada NO MESMO NÍVEL
+                }
+
+                // 2b. Checa Mudança de Nível (Passa o Turno SOMENTE se o nível for limpo)
+                else if (balls.length === 0 && !levelChanging) {
+                    levelChanging = true;
+                    gameSounds.playSafe(gameSounds.mudancaDeNivel);
+                    setTimeout(() => {
+                        // Avança o nível do JOGADOR ATUAL e chama passTurn para ir ao próximo jogador
+                        advancePlayerLevel(); 
+                        levelChanging = false;
+                    }, 1000);
+                }
+                
+                // 2c. Fim de jogada normal no multiplayer (Sem avanço de nível, o jogador ATUAL joga de novo)
+                else if (numPlayers > 1) {
+                    // Turno só muda quando o nível é limpo. Se não limpou, o jogador atual joga de novo.
+                }
+            }
+            
+            // Desenho da playerBall
+            const player = playerBall;
+            if(player.dragging){
+                ctx.beginPath(); 
+                ctx.moveTo(player.x, player.y); 
+                const lineX = player.x + (player.x - dragCurrent.x) * 0.5;
+                const lineY = player.y + (player.y - dragCurrent.y) * 0.5;
+                ctx.lineTo(lineX, lineY); 
+                ctx.strokeStyle="yellow"; 
+                ctx.lineWidth=2; 
+                ctx.stroke();
+
+                // Desenha o círculo no final do vetor
+                ctx.beginPath(); 
+                ctx.arc(lineX, lineY, 5, 0, Math.PI * 2); 
+                ctx.fillStyle="red"; 
+                ctx.fill(); 
+            }
+            
+            // Desenha a bolinha preta principal (player)
+            ctx.beginPath(); 
+            ctx.arc(player.x,player.y,radius,0,Math.PI*2); 
+            ctx.fillStyle="black"; 
+            ctx.fill(); 
+            ctx.strokeStyle="white"; 
+            ctx.stroke();
+            ctx.fillStyle="white"; 
+            ctx.font="9px Arial"; 
+            ctx.textAlign="center"; 
+            ctx.textBaseline="middle";
+            ctx.fillText(p.playerNumber,player.x,player.y);
+
+            // Desenha o efeito de pulsação para o jogador ATUAL
+            const pulse=Math.sin(Date.now()*0.005)*3;
+            ctx.beginPath();
+            ctx.arc(player.x,player.y,radius+5+pulse,0,Math.PI*2);
+            ctx.strokeStyle="yellow";
+            ctx.lineWidth=2;
+            ctx.stroke();
+            
+        }
+
+        const startButton = document.getElementById("start-button");
+        const startScreen = document.getElementById("start-screen");
+
+        startButton.addEventListener("click", () => {
+            startScreen.style.display = 'none';
+            // Chama a inicialização, que agora lida corretamente com a lógica do player/bola
+            initGame(); 
+        });
+    </script>
+
+</body>
+</html>
