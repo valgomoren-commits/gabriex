@@ -1,9 +1,0 @@
-colisao-diabinho.mp3
-colisao-lateral.mp3
-record.mp3
-tiro-da-bolinha.mp3
-colisao-obstaculo-fixo.mp3
-volta-ao-ponto-inicial.mp3
-musica-de-fundo.mp3
-mudança-de-nivel.mp3
-colisao-bola-colorida.mp3
